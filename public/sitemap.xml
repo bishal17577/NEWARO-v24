@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Replace YOUR-DOMAIN with your real domain before publishing -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://YOUR-DOMAIN/</loc></url>
+  <url><loc>https://YOUR-DOMAIN/explore</loc></url>
+  <url><loc>https://YOUR-DOMAIN/shops</loc></url>
+  <url><loc>https://YOUR-DOMAIN/jobs</loc></url>
+  <url><loc>https://YOUR-DOMAIN/events</loc></url>
+  <url><loc>https://YOUR-DOMAIN/nearby</loc></url>
+  <url><loc>https://YOUR-DOMAIN/news</loc></url>
+  <url><loc>https://YOUR-DOMAIN/membership</loc></url>
+  <url><loc>https://YOUR-DOMAIN/creator</loc></url>
+  <url><loc>https://YOUR-DOMAIN/about</loc></url>
+  <url><loc>https://YOUR-DOMAIN/contact</loc></url>
+  <url><loc>https://YOUR-DOMAIN/terms</loc></url>
+  <url><loc>https://YOUR-DOMAIN/privacy</loc></url>
+</urlset>

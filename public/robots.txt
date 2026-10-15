@@ -1,0 +1,23 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /auth
+Disallow: /checkout
+Disallow: /cart
+Disallow: /orders
+Disallow: /chat
+Disallow: /messages
+Disallow: /notifications
+Disallow: /wallet
+Disallow: /favorites
+Disallow: /favourites
+Disallow: /settings
+Disallow: /edit-profile
+Disallow: /profile
+Disallow: /friends
+Disallow: /create-
+Disallow: /shop-dashboard
+Disallow: /analytics
+
+# Replace YOUR-DOMAIN with your real domain before publishing
+Sitemap: https://YOUR-DOMAIN/sitemap.xml

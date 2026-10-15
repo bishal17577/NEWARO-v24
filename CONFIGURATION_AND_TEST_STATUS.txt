@@ -1,0 +1,29 @@
+NEWARO v22 — CONFIGURATION & VERIFICATION NOTES
+
+Firebase
+- The supplied Firebase web config is configured for project newaro-21104.
+- Ensure Email/Password and Google providers are enabled in Firebase Console if the UI uses them.
+- Add localhost and your deployed domain under Authentication > Settings > Authorized domains.
+- Verify Firestore is enabled and deploy/review firestore.rules before production.
+- Client Firebase config is not a substitute for Firestore Security Rules.
+
+Gemini
+- The uploaded source archive included a Gemini key. It has been removed from this output ZIP.
+- Revoke/rotate that previously exposed key in Google AI Studio and create a fresh one.
+- Put the new key in GEMINI_API_KEY in .env.local for local development, or set it as a server-only environment variable on the host.
+- Never use VITE_GEMINI_API_KEY and never commit .env.local.
+- Test actual responses in the app; a health/status endpoint only confirms configuration, not end-to-end behavior.
+
+Start
+  npm ci
+  # edit .env.local and add a fresh GEMINI_API_KEY
+  npm run dev
+
+Production
+  npm ci && npm run build
+  npm run start:prod
+
+Verification performed for this package:
+- Source archive was readable and original ZIP integrity passed.
+- Automated source syntax/security checks could not run in this environment because dependencies (including esbuild) are not installed.
+- No production build or live Gemini/Firebase end-to-end test is claimed.

@@ -1,0 +1,351 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-@\\.]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'bishalxtha17@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    function isShopOwnerData(shopData) {
+      return isSignedIn() && (
+        shopData.ownerId == request.auth.uid ||
+        (shopData.ownerEmail is string && request.auth.token.email == shopData.ownerEmail)
+      );
+    }
+
+    function isUploader(docData) {
+      return isSignedIn() && (
+        docData.authorId == request.auth.uid ||
+        (docData.authorEmail is string && request.auth.token.email == docData.authorEmail)
+      );
+    }
+
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && (request.auth.uid == adminId || isAdmin());
+      allow list, create, update, delete: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow get, list: if true;
+      allow create: if isSignedIn() && isValidId(userId) && (
+        request.auth.uid == userId || isAdmin()
+      );
+      allow update: if isSignedIn() && isValidId(userId) && (
+        isAdmin() ||
+        (request.auth.uid == userId && (
+          !incoming().diff(existing()).affectedKeys().hasAny(['role']) ||
+          incoming().role == existing().role
+        )) ||
+        incoming().diff(existing()).affectedKeys().hasOnly(['followersCount', 'followingCount', 'giftCoins', 'broadcastReadAt', 'redeemedCodes', 'claimedTasks'])
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /shops/{shopId} {
+      allow get, list: if true;
+      allow create: if isSignedIn() && isValidId(shopId) && (
+        isAdmin() ||
+        (incoming().ownerId == request.auth.uid && incoming().status == 'pending' && incoming().verified != true)
+      );
+      allow update: if isSignedIn() && isValidId(shopId) && (
+        isAdmin() ||
+        (isShopOwnerData(existing()) && !incoming().diff(existing()).affectedKeys().hasAny(['status', 'approved', 'verified', 'ownerId'])) ||
+        incoming().diff(existing()).affectedKeys().hasOnly(['followersCount', 'rating', 'reviewCount'])
+      );
+      allow delete: if isSignedIn() && isValidId(shopId) && (
+        isAdmin() || isShopOwnerData(existing())
+      );
+    }
+
+    match /products/{productId} {
+      allow get, list: if true;
+      allow create: if isSignedIn() && isValidId(productId) && (
+        incoming().sellerId == request.auth.uid ||
+        (incoming().sellerEmail is string && request.auth.token.email == incoming().sellerEmail) ||
+        isAdmin()
+      );
+      allow update: if isSignedIn() && isValidId(productId) && (
+        isAdmin() ||
+        existing().sellerId == request.auth.uid ||
+        (existing().sellerEmail is string && request.auth.token.email == existing().sellerEmail) ||
+        incoming().diff(existing()).affectedKeys().hasOnly(['viewsCount', 'likesCount', 'ordersCount', 'rating', 'reviewCount', 'stock'])
+      );
+      allow delete: if isSignedIn() && isValidId(productId) && (
+        isAdmin() ||
+        existing().sellerId == request.auth.uid ||
+        (existing().sellerEmail is string && request.auth.token.email == existing().sellerEmail)
+      );
+
+      match /likes/{likeUserId} {
+        allow get, list: if true;
+        allow create, update, delete: if isSignedIn() && (request.auth.uid == likeUserId || isAdmin());
+      }
+
+      match /reviews/{reviewId} {
+        allow get, list: if true;
+        allow create: if isSignedIn();
+        allow update, delete: if isSignedIn() && (existing().authorId == request.auth.uid || isAdmin());
+      }
+    }
+
+    match /posts/{postId} {
+      allow get, list: if true;
+      allow create: if isSignedIn() && isValidId(postId) && (
+        incoming().authorId == request.auth.uid || isAdmin()
+      );
+      allow update: if isSignedIn() && isValidId(postId) && (
+        isAdmin() ||
+        isUploader(existing()) ||
+        incoming().diff(existing()).affectedKeys().hasOnly(['likesCount', 'commentsCount', 'sharesCount'])
+      );
+      allow delete: if isSignedIn() && isValidId(postId) && (
+        isAdmin() || isUploader(existing())
+      );
+
+      match /likes/{likeUserId} {
+        allow get, list: if true;
+        allow create, update, delete: if isSignedIn() && (request.auth.uid == likeUserId || isAdmin());
+      }
+
+      match /comments/{commentId} {
+        allow get, list: if true;
+        allow create: if isSignedIn();
+        allow update, delete: if isSignedIn() && (existing().authorId == request.auth.uid || isAdmin());
+      }
+    }
+
+    match /stories/{storyId} {
+      allow get, list: if true;
+      allow create: if isSignedIn() && isValidId(storyId) && (
+        incoming().authorId == request.auth.uid || isAdmin()
+      );
+      allow update: if isSignedIn() && isValidId(storyId) && (
+        isAdmin() || isUploader(existing())
+      );
+      allow delete: if isSignedIn() && isValidId(storyId) && (
+        isAdmin() ||
+        isUploader(existing()) ||
+        existing().expiresAt < request.time.toMillis()
+      );
+    }
+
+    match /carts/{cartUid} {
+      allow read, write: if isSignedIn() && request.auth.uid == cartUid;
+    }
+
+    match /orders/{orderId} {
+      allow get, list: if isSignedIn() && (
+        isAdmin() ||
+        existing().buyerId == request.auth.uid ||
+        existing().sellerId == request.auth.uid ||
+        (existing().buyerEmail is string && request.auth.token.email == existing().buyerEmail) ||
+        (existing().shopOwnerEmail is string && request.auth.token.email == existing().shopOwnerEmail)
+      );
+      allow create: if isSignedIn() && isValidId(orderId) && (
+        incoming().buyerId == request.auth.uid || isAdmin()
+      );
+      allow update: if isSignedIn() && isValidId(orderId) && (
+        isAdmin() ||
+        existing().sellerId == request.auth.uid ||
+        (existing().shopOwnerEmail is string && request.auth.token.email == existing().shopOwnerEmail) ||
+        (existing().buyerId == request.auth.uid &&
+          existing().status == 'pending' &&
+          incoming().status == 'cancelled' &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /chats/{chatId} {
+      allow get: if isSignedIn() && (
+        resource == null ||
+        isAdmin() ||
+        request.auth.uid in resource.data.participants ||
+        ('shopOwnerEmail' in resource.data && resource.data.shopOwnerEmail is string && request.auth.token.email == resource.data.shopOwnerEmail)
+      );
+      allow list: if isSignedIn();
+      allow create, update: if isSignedIn();
+      allow delete: if isAdmin();
+
+      match /messages/{messageId} {
+        allow get, list, create, update: if isSignedIn();
+        allow delete: if isSignedIn() && (
+          resource == null ||
+          existing().senderId == request.auth.uid ||
+          isAdmin()
+        );
+      }
+    }
+
+    match /api_keys/{keyId} {
+      allow get, list: if isAdmin();
+      allow create: if isSignedIn() && isValidId(keyId);
+      allow update: if isSignedIn() && isValidId(keyId) && (
+        isAdmin() ||
+        existing().addedBy == request.auth.uid ||
+        (existing().addedByEmail is string && request.auth.token.email == existing().addedByEmail) ||
+        incoming().diff(existing()).affectedKeys().hasOnly(['failCount', 'usageCount', 'lastUsedAt', 'enabled'])
+      );
+      allow delete: if isSignedIn() && isValidId(keyId) && (
+        isAdmin() ||
+        existing().addedBy == request.auth.uid ||
+        (existing().addedByEmail is string && request.auth.token.email == existing().addedByEmail)
+      );
+    }
+
+    match /redeem_codes/{codeId} {
+      allow get, list: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        incoming().diff(existing()).affectedKeys().hasOnly(['usedCount', 'usedBy'])
+      );
+    }
+
+    match /coin_targets/{targetId} {
+      allow get, list: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        incoming().diff(existing()).affectedKeys().hasOnly(['claimedBy'])
+      );
+    }
+
+    match /notifications/{notifId} {
+      allow get, list: if isSignedIn() && (
+        existing().recipientId == request.auth.uid ||
+        existing().userId == request.auth.uid ||
+        existing().recipientId == 'ALL' ||
+        isAdmin()
+      );
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isSignedIn() && (
+        ((existing().recipientId == request.auth.uid || existing().userId == request.auth.uid) &&
+          existing().recipientId != 'ALL') ||
+        isAdmin()
+      );
+    }
+
+    match /announcements/{announcementId} {
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /follows/{followId} {
+      allow get, list: if true;
+      allow create: if isSignedIn() && incoming().followerId == request.auth.uid;
+      allow delete: if isSignedIn() && (existing().followerId == request.auth.uid || isAdmin());
+    }
+
+    match /events/{eventId} {
+      allow get, list: if true;
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        existing().creatorId == request.auth.uid ||
+        incoming().diff(existing()).affectedKeys().hasOnly(['interestedCount', 'goingCount'])
+      );
+      allow delete: if isSignedIn() && (existing().creatorId == request.auth.uid || isAdmin());
+    }
+
+    match /jobs/{jobId} {
+      allow get, list: if true;
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        existing().posterId == request.auth.uid ||
+        incoming().diff(existing()).affectedKeys().hasOnly(['proposalsCount'])
+      );
+      allow delete: if isSignedIn() && (existing().posterId == request.auth.uid || isAdmin());
+    }
+
+    match /job_proposals/{proposalId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && incoming().freelancerId == request.auth.uid;
+      allow update, delete: if isSignedIn() && (existing().freelancerId == request.auth.uid || isAdmin());
+    }
+
+    match /contractor_goals/{goalId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid;
+      allow update, delete: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    match /contractor_settings/{userId} {
+      allow get, list: if isSignedIn();
+      allow create, update: if isSignedIn() && request.auth.uid == userId;
+      allow delete: if isAdmin();
+    }
+
+    match /categories/{catId} {
+      allow get, list: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    // Public app directory. Users may submit pending listings; only admins publish them.
+    match /users/{userId}/coin_transactions/{transactionId} {
+      allow get, list: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow create: if isSignedIn() && (request.auth.uid == userId || isAdmin()) && incoming().amount is number && incoming().amount > 0 && incoming().amount <= 100000 && incoming().type in ['credit', 'debit'];
+      allow update, delete: if isAdmin();
+    }
+
+    match /apps/{appId} {
+      allow get, list: if resource.data.status == 'published' || isAdmin() || (isSignedIn() && resource.data.ownerUid == request.auth.uid);
+      allow create: if isSignedIn() && incoming().ownerUid == request.auth.uid && incoming().status == 'pending' && incoming().pinned == false;
+      allow update, delete: if isAdmin();
+    }
+
+    // Operators create and publish services; customers can only create pending requests.
+    match /booking_services/{serviceId} {
+      allow get, list: if resource.data.status == 'published' || isAdmin() || (isSignedIn() && resource.data.ownerUid == request.auth.uid);
+      allow create: if isAdmin() || (isSignedIn() && incoming().ownerUid == request.auth.uid && incoming().status == 'pending');
+      allow update: if isAdmin() || (isSignedIn() && resource.data.ownerUid == request.auth.uid && resource.data.status == 'pending' && incoming().status == 'pending');
+      allow delete: if isAdmin() || (isSignedIn() && resource.data.ownerUid == request.auth.uid && resource.data.status == 'pending');
+    }
+
+    match /bookings/{bookingId} {
+      allow create: if isSignedIn() && incoming().customerUid == request.auth.uid && incoming().status == 'pending';
+      allow get, list: if isSignedIn() && (isAdmin() || resource.data.customerUid == request.auth.uid || resource.data.operatorUid == request.auth.uid);
+      allow update: if isAdmin() || (isSignedIn() && resource.data.operatorUid == request.auth.uid && incoming().diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'operatorNote']));
+      allow delete: if isAdmin();
+    }
+
+    // Live bus records are public to read. A signed-in assigned driver can only update GPS fields.
+    match /bus_trips/{tripId} {
+      allow get, list: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (isSignedIn() && resource.data.driverUid == request.auth.uid && incoming().diff(resource.data).affectedKeys().hasOnly(['currentLocation', 'locationUpdatedAt']));
+    }
+
+    match /settings/{settingId} {
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
+    }
+  }
+}

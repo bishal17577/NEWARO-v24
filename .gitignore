@@ -1,0 +1,16 @@
+# Dependencies and generated output
+node_modules/
+dist/
+coverage/
+*.log
+npm-debug.log*
+.DS_Store
+
+# Local secrets and environment files
+.env
+.env.*
+!.env.example
+
+# Local editor / OS files
+.vscode/
+.idea/
